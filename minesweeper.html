@@ -12,7 +12,17 @@
       .clearfix {
         zoom:1;
       }
-
+      #minesweeper .cell span {
+        font-size: 12px;
+        font-weight: bold;
+        color: black;
+      }
+      #minesweeper .cell span.green {
+        color: green;
+      }
+      #minesweeper .cell span.red {
+        color: red;
+      }
       .clearfix:after {
         visibility: hidden;
         display: block;
@@ -47,17 +57,20 @@
         float: left;
         box-sizing: border-box;
       }
-      .cell:disabled:hover {
-        cursor: normal;
-      }
       .cell.active {
         border: 1px solid darkgray;
         background: #e8f2f4;
       }
+      .cell.active:hover {
+        cursor: auto;
+      }      
       .cell:hover {
         cursor: pointer;
       }
-
+      .cell.mined {
+        background: url('images/mine.jpeg') center center no-repeat;
+        background-size: 80% 80%;        
+      }
       .mine {
         float: left;
         width:30px;
@@ -117,12 +130,14 @@
     var constructGrid = function() {
       var minePositions = randomizeMinePlacement().sort(function(a,b){ return a-b; });
       //jquery object
-      var cells = [];
+      var c=0,
+        cells = [];
 
       // construct grid from cols and rows.... 
-      for(i=0,max=cols;i<max;i++) {
-
-        for(j=0,rmax=rows;j<rmax;j++) {
+      for(i=1,max=cols;i<=max;i++) {
+        for(j=1,rmax=rows;j<=rmax;j++) {
+        //counter for cellids
+        c += 1;
           var cell = $('<div class="cell" style="width: '+cellWidth+'px; height: '+cellHeight+'px;"></div>');
           var idx = i*j;
           if(minePositions.indexOf(idx) > -1) {
@@ -131,8 +146,7 @@
           else {
             $(cell).attr('data-hm', "0");
           }
-          $(cell).attr('data-cellid', idx);
-            console.log($(cell));
+          $(cell).attr('data-cellid', c);
           cells.push($(cell));
         }
       }
@@ -175,6 +189,143 @@
     }
 
 
+    //find mines in 8 adjacent tiles
+    function selectNeighbors(cell) {
+      var q = [],
+        cellid = parseInt( cell.attr('data-cellid') ),
+        first = cellid == 1 ? true : false,
+        last = cellid == (cols*rows) ? true : false,
+        rowStart = cellid%cols == 1 ? true : false,
+        rowEnd = cellid%cols == 0 ? true : false,
+        nearbyMines=0;
+
+      // if it's first or last col...
+      if(first) {
+        q = findAdjacentCells(cellid, 'first');
+      }
+
+      else if(last) {
+        q = findAdjacentCells(cellid, 'last');
+      }
+
+      else if(rowStart && !first) {
+        // if it's higher than the cell count - column count, meaning it will only have 5 neighbors (now row below)
+        if(cellid > parseInt(cols*rows)-parseInt(cols)) {
+          q = findAdjacentCells(cellid, 'lastrow_start');
+        }
+        else {
+          q = findAdjacentCells(cellid, 'row_start');
+        }
+      }
+
+      else if(rowEnd && !last) {
+        // if it's lower than the column count, meaning it will only have 5 neighbors (now row above)
+        if(cellid <= parseInt(cols)) {
+          q = findAdjacentCells(cellid, 'firstrow_end');
+        }
+        else {
+          q = findAdjacentCells(cellid, 'row_end');
+        }
+      }
+
+      // otherwise there should be 8 neighbors to check
+      else {
+        q = findAdjacentCells(cellid, '');
+      }
+      return q;
+    }
+
+    function revealCell(cell) {
+      var collection = selectNeighbors(cell);
+      // q => array of jquery objects we can iterate through to look for mines, and recursively expand
+      $(collection).each(function() {
+        setActive($(this));
+        mineCount = countAdjacentMines( selectNeighbors($(this)) );
+        renderCellContent($(this).attr('data-cellid'), mineCount);
+        if( parseInt( $(this).attr('data-hm') ) == 1 ) {
+          $(this).addClass('mined');
+          explode();
+        }
+      });
+      //return q;
+    }
+
+    // takes an array and counts instances of data-hm == 1
+    var countAdjacentMines = function(collection) {
+      var count = 0;
+      $(collection).each( function() {
+        if( parseInt( $(this).attr('data-hm') ) == 1 ) {
+          count += 1;
+        }
+      });
+      return count;
+    }
+    // takes 'position' argument, telling position of selected cell in grid so we know which neighbors to grab
+    // returns array of neighbor cells
+    var findAdjacentCells = function(cellid, position) {
+      arrayOut = [];
+      arrayOut.push(findCellById(cellid));
+      if(position == 'first') {
+        arrayOut.push(findCellById( parseInt(cellid)+1 ), findCellById( parseInt(cellid)+cols ), findCellById( parseInt(cellid)+(cols+1) ));
+      }
+      else if(position == 'last') {
+        arrayOut.push(findCellById( parseInt(cellid)-1 ), findCellById( parseInt(cellid)-cols ), findCellById( parseInt(cellid)-(cols+1) ));
+      }
+      else if(position == 'row_start') {
+        arrayOut.push(findCellById( parseInt(cellid)+1 ), findCellById( parseInt(cellid)-cols ), findCellById( parseInt(cellid)-(cols-1) ), findCellById( parseInt(cellid)+(cols) ), findCellById( parseInt(cellid)+(cols+1) ));
+      }
+      else if(position == 'lastrow_start') {
+        arrayOut.push(findCellById( parseInt(cellid)+1 ), findCellById( parseInt(cellid)-cols ), findCellById( parseInt(cellid)-(cols-1) ));
+      }
+
+      else if(position == 'row_end') {
+        arrayOut.push(findCellById( parseInt(cellid)-1 ), findCellById( parseInt(cellid)-cols ), findCellById( parseInt(cellid)-(cols+1) ), findCellById( parseInt(cellid)+(cols) ), findCellById( parseInt(cellid)+(cols-1) ));
+      }
+
+      else if(position == 'firstrow_end') {
+        arrayOut.push(findCellById( parseInt(cellid)-1 ), findCellById( parseInt(cellid)+(cols) ), findCellById( parseInt(cellid)+(cols-1) ));
+      }
+      //all 8 neighbors
+      else {
+        arrayOut.push(findCellById( parseInt(cellid)-1 ), findCellById( parseInt(cellid)-cols ), findCellById( parseInt(cellid)-(cols+1) ), findCellById( parseInt(cellid)-(cols-1) ), findCellById( parseInt(cellid)+1 ), findCellById( parseInt(cellid)+(cols+1) ), findCellById( parseInt(cellid)+cols ), findCellById( parseInt(cellid)+(cols-1) ));
+      }
+
+      return arrayOut;
+    }
+
+    var findCellById = function(cid){
+      var foundCell;
+      $('#minesweeper > div').each(function() {
+        //
+        if(parseInt($(this).attr('data-cellid')) == cid) {
+          foundCell = $(this);
+        }
+      });
+      return $(foundCell);
+    };
+
+    //change state of cell to active ...maybe 'revealed' would be better
+    function setActive(cell) {
+      if(!cell.hasClass('active')) {
+        cell.addClass('active');
+      }
+
+    }
+
+    var renderCellContent = function(cellid, mineCount) {
+      var c;
+      if(mineCount <= 1) { c = 'green'; }
+      else if(mineCount > 1 && mineCount <=3) { c = 'red'; }
+      else { c = 'black'; }
+      if(mineCount > 0) {
+        findCellById( parseInt(cellid) ).html('<span class="'+c+'">'+mineCount+'</span>');
+      }
+    }
+
+    function hasMine(cell) {
+      console.log('has mine?');
+      parseInt( $(cell).attr('data-hm') ) == 1;
+    }
     // not in use currently
     function setGameState(state) {
       gameState = state;
@@ -184,10 +335,9 @@
     initializeGame();
 
     $(document).on('click', '#minesweeper > div', function() {
-      if(!$(this).hasClass('active') && !$(this).attr('disabled')) {
-        $(this).addClass('active');
+      if(gameState == 'on') {
+        revealCell($(this));
       }
-      //explode();
     });
 
 
