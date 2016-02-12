@@ -107,6 +107,7 @@
       rows,
       cols,
       mineCount,
+      activeCount = 0,
       explodedCount = 0,
       maxExplodes = 3,
       gameState='off';
@@ -147,6 +148,7 @@
             $(cell).attr('data-hm', "0");
           }
           $(cell).attr('data-cellid', c);
+          $(cell).attr('data-content', "0");
           cells.push($(cell));
         }
       }
@@ -234,20 +236,79 @@
       }
       return q;
     }
+    // compares count of active eg: overturned - tiles against the count of the total tiles - mine count
+    function gameWon(cnt) {
+      if( parseInt(cnt) >= parseInt((cols*rows) - mineCount)) {
+        return true;
+      }
+      else {
+        return false;
+      }
+    }
+
+    // what we run on successful completion of the game
+    function crownChampion() {
+      alert('You won fucker!');
+    }
 
     function revealCell(cell) {
-      var collection = selectNeighbors(cell);
+      if( gameWon(activeCount) ) {
+        return crownChampion();
+      }
       // q => array of jquery objects we can iterate through to look for mines, and recursively expand
-      $(collection).each(function() {
-        setActive($(this));
-        mineCount = countAdjacentMines( selectNeighbors($(this)) );
-        renderCellContent($(this).attr('data-cellid'), mineCount);
-        if( parseInt( $(this).attr('data-hm') ) == 1 ) {
-          $(this).addClass('mined');
+      var collection = selectNeighbors(cell);
+
+      // if any of the set are active we expand cells until we uncover one at a them
+      if( neighborHasContent( $(collection) ) ) {
+        mineCount = countAdjacentMines( selectNeighbors(cell) );
+        renderCellContent(cell.attr('data-cellid'), mineCount);
+        setActive(cell);
+        activeCount += 1;
+
+        if( parseInt( cell.attr('data-hm') ) == 1 ) {
+          cell.addClass('mined');
           explode();
         }
+
+      }
+
+      // if none are active, we uncover all we can, providing they aren't mined
+      else {
+        $(collection).each(function() {
+          mineCount = countAdjacentMines( selectNeighbors($(this)) );
+          if( !hasMine($(this)) && !neighborHasContent( selectNeighbors($(this)) ) ) {
+            setActive($(this));
+            renderCellContent($(this).attr('data-cellid'), mineCount);
+            activeCount += 1;
+          }
+
+          //revealCell($(this));
+        });
+      }
+    }
+
+    // takes an array and counts instances of class active
+    var isANeighborActive = function(collection) {
+      var count = 0;
+      $(collection).each( function() {
+        if( $(this).hasClass('active') ) {
+          count += 1;
+        }
       });
-      //return q;
+      if(count > 0) { return true; }
+      else { return false; }
+    }
+
+    // takes an array and counts instances of cells which have data-attr content = 1
+    var neighborHasContent = function(collection) {
+      var count = 0;
+      $(collection).each( function() {
+        if( parseInt( $(this).attr('data-content') ) == 1 ) {
+          count += 1;
+        }
+      });
+      if(count > 0) { return true; }
+      else { return false; }
     }
 
     // takes an array and counts instances of data-hm == 1
@@ -318,7 +379,7 @@
       else if(mineCount > 1 && mineCount <=3) { c = 'red'; }
       else { c = 'black'; }
       if(mineCount > 0) {
-        findCellById( parseInt(cellid) ).html('<span class="'+c+'">'+mineCount+'</span>');
+        findCellById( parseInt(cellid) ).html('<span class="'+c+'">'+mineCount+'</span>').attr('data-content', "1");
       }
     }
 
