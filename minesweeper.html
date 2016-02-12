@@ -88,7 +88,7 @@
     <!-- <span>Game is <script>document.writeln(gameState);</script> -->
     <div class="game_wrapper clearfix">
       <div class="center_pane">
-        <h1>Minesweeper</h1>
+        <h1><a href="" title="reload">Minesweeper</a></h1>
         <div id="minesweeper"></div>
       </div>
       <div class="right_pane clearfix">
@@ -107,6 +107,7 @@
       rows,
       cols,
       mineCount,
+      nearbyMineCount = 0,
       activeCount = 0,
       explodedCount = 0,
       maxExplodes = 3,
@@ -238,7 +239,7 @@
     }
     // compares count of active eg: overturned - tiles against the count of the total tiles - mine count
     function gameWon(cnt) {
-      if( parseInt(cnt) >= parseInt((cols*rows) - mineCount)) {
+      if( parseInt(cnt) >= parseInt(cols*rows) - parseInt(mineCount) ) {
         return true;
       }
       else {
@@ -260,8 +261,8 @@
 
       // if any of the set are active we expand cells until we uncover one at a them
       if( neighborHasContent( $(collection) ) ) {
-        mineCount = countAdjacentMines( selectNeighbors(cell) );
-        renderCellContent(cell.attr('data-cellid'), mineCount);
+        nearbyMineCount = countAdjacentMines( selectNeighbors(cell) );
+        renderCellContent(cell.attr('data-cellid'), nearbyMineCount);
         setActive(cell);
         activeCount += 1;
 
@@ -275,10 +276,10 @@
       // if none are active, we uncover all we can, providing they aren't mined
       else {
         $(collection).each(function() {
-          mineCount = countAdjacentMines( selectNeighbors($(this)) );
+          nearbyMineCount = countAdjacentMines( selectNeighbors($(this)) );
           if( !hasMine($(this)) && !neighborHasContent( selectNeighbors($(this)) ) ) {
             setActive($(this));
-            renderCellContent($(this).attr('data-cellid'), mineCount);
+            renderCellContent($(this).attr('data-cellid'), nearbyMineCount);
             activeCount += 1;
           }
 
@@ -375,9 +376,10 @@
 
     var renderCellContent = function(cellid, mineCount) {
       var c;
-      if(mineCount <= 1) { c = 'green'; }
-      else if(mineCount > 1 && mineCount <=3) { c = 'red'; }
-      else { c = 'black'; }
+      c = mineCount == 1 ? 'green' : mineCount == 2 ? 'red' : 'black';
+      // if(mineCount <= 1) { c = 'green'; }
+      // else if(mineCount > 1 && mineCount <=3) { c = 'red'; }
+      // else { c = 'black'; }
       if(mineCount > 0) {
         findCellById( parseInt(cellid) ).html('<span class="'+c+'">'+mineCount+'</span>').attr('data-content', "1");
       }
