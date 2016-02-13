@@ -48,7 +48,7 @@
         border: 1px solid darkgray;
       }
       .cell {
-        background: lightgray;
+        background-color: lightgray;
         text-align: center;
         vertical-align: middle;
         line-height: 150%;
@@ -57,9 +57,17 @@
         float: left;
         box-sizing: border-box;
       }
+      .cell.marked {
+        background: lightgray url('images/flag.png') center center no-repeat;
+        background-size: 80% 75%;
+      }
+      .cell.unmarked {
+        background: lightgray url('images/questionmark.png') center center no-repeat;
+        background-size: 80% 80%;
+      }
       .cell.active {
         border: 1px solid darkgray;
-        background: #e8f2f4;
+        background-color: #e8f2f4;
       }
       .cell.active:hover {
         cursor: auto;
@@ -92,6 +100,20 @@
         <div id="minesweeper"></div>
       </div>
       <div class="right_pane clearfix">
+        <form id="configForm">
+          <label>Columns: <input type="text" id="cols" name="cols" size="5" maxlength="2" value="getCols()" /></label>
+          <label>Rows: <input type="text" id="rows" name="rows" size="5" maxlength="2" value="" /></label>
+          <label>Difficulty level: 
+            <select name="difficulty_level" id="difficulty_level" value="getDifficultyLevel()">
+              <option value="beginner">novice</option>
+              <option value="intermediate">well-practiced</option>
+              <option value="expert">pro</option>
+            </select>
+          </label>
+          <input type="submit" id="submit" />
+        </form>
+        <br />
+        <p><strong>Mines:</strong> <span id="minecount"></span></p>
         <span class="msg"></span>
       </div>
     </div>
@@ -106,7 +128,8 @@
       cellHeight,
       rows,
       cols,
-      mineCount,
+      mineCount=2,
+      difficultyLevel,
       nearbyMineCount = 0,
       activeCount = 0,
       explodedCount = 0,
@@ -117,19 +140,21 @@
     var initializeGame = function() {
       cellWidth = 25,
       cellHeight = 25,
-      rows = 12,
-      cols = 30,
-      mineCount = 22,
+      rows = 10,
+      cols = 10,
+      difficultyLevel = 'beginner',
+      mineCount = 2,
       gameState='on';
-
-      $('#minesweeper')
-      .css('width', cols * cellWidth + 'px')
-      .css('height', rows * cellHeight + 'px');
-
+      //setConfigFormVals();
       constructGrid();
     }
 
+
     var constructGrid = function() {
+      $('#minesweeper')
+        .css('width', cols * cellWidth + 'px')
+        .css('height', rows * cellHeight + 'px');
+
       var minePositions = randomizeMinePlacement().sort(function(a,b){ return a-b; });
       //jquery object
       var c=0,
@@ -160,6 +185,7 @@
 
     // returns array of integers - will serve as ids of cells to place mines beneath
     function randomizeMinePlacement() {
+      console.log('mineCount' + mineCount);
       var cellIndexes = [],
         cellCount = rows * cols;
       for(i=0,max=mineCount;i<max;i++){
@@ -239,7 +265,10 @@
     }
     // compares count of active eg: overturned - tiles against the count of the total tiles - mine count
     function gameWon(cnt) {
-      if( parseInt(cnt) >= parseInt(cols*rows) - parseInt(mineCount) ) {
+      console.log('count: ' + parseInt(countActiveCells()));
+      console.log('calc: ' + (parseInt(cols*rows) - parseInt(mineCount)));
+
+      if( parseInt(countActiveCells()) == (parseInt(cols*rows) - parseInt(mineCount)) ) {
         return true;
       }
       else {
@@ -247,15 +276,22 @@
       }
     }
 
+    function countActiveCells() {
+      count = 0;
+      $('#minesweeper > div').each(function() {
+        if( $(this).hasClass('active') ) {
+          count += 1;
+        }
+      });
+      return count;
+    }
+
     // what we run on successful completion of the game
     function crownChampion() {
-      alert('You won fucker!');
+      alert('You won!');
     }
 
     function revealCell(cell) {
-      if( gameWon(activeCount) ) {
-        return crownChampion();
-      }
       // q => array of jquery objects we can iterate through to look for mines, and recursively expand
       var collection = selectNeighbors(cell);
 
@@ -285,6 +321,10 @@
 
           //revealCell($(this));
         });
+      }
+      console.log(activeCount + '---' + rows*cols);
+      if( gameWon(activeCount) ) {
+        return crownChampion();
       }
     }
 
@@ -368,10 +408,45 @@
 
     //change state of cell to active ...maybe 'revealed' would be better
     function setActive(cell) {
+      //incase they were flagged prior to being uncovered
+      cell.removeClass('unmarked').removeClass('marked');
+
       if(!cell.hasClass('active')) {
         cell.addClass('active');
       }
 
+    }
+
+    //change state of cell to marked ...these are ones we find suspicious and believe have mines under them
+    function markAsMined(cell) {
+      if(cell.hasClass('active')) {
+        return false;
+      }
+      //incase they were flagged prior to being uncovered
+      cell.removeClass('unmarked');
+      
+      if(!cell.hasClass('marked')) {
+        cell.addClass('marked');
+      }
+      return false;
+    }
+
+    //change state of cell to unmarked ...these are ones we previously found suspicious and believed had mines, but now think not
+    function unmarkAsMined(cell) {
+      if(cell.hasClass('active')) {
+        return false;
+      }
+      //incase they were flagged prior 
+      cell.removeClass('marked');
+      
+      if(!cell.hasClass('unmarked')) {
+        cell.addClass('unmarked');
+      }
+      return false;
+    }
+
+    var cellIsMarked = function(cell) {
+      return cell.hasClass('marked') == true;
     }
 
     var renderCellContent = function(cellid, mineCount) {
@@ -394,15 +469,95 @@
       gameState = state;
     }
 
-    // start it off!
-    initializeGame();
+    // capture right click to set and remove flags for suspected mine sites
+    $(document).on('contextmenu', '#minesweeper > div', function(e) {
+      e.preventDefault();
+      if( !cellIsMarked( $(this) ) ) {
+        return markAsMined($(this));
+      }
+      else {
+        return unmarkAsMined($(this));
+      }
+      // return false;
 
-    $(document).on('click', '#minesweeper > div', function() {
-      if(gameState == 'on') {
+    });
+
+    $(document).on('click', '#minesweeper > div', function(e) {
+      if( (gameState == 'on') && (!cellIsMarked( $(this) )) ) {
         revealCell($(this));
       }
     });
 
+    //populates config form with values from js
+    var setConfigFormVals = function() {
+      $('#configForm #cols').val( getCols() );
+      $('#configForm #rows').val( getRows() );
+      $('#configForm #difficulty_level').val( getDifficultyLevel() );
+    }
+
+    // returns array of objects from form, eg: [{"name":"cols","value":"15"}...]
+    $('#configForm').on('submit', function(e) {
+      e.preventDefault();
+      // setGameVars( JSON.parse(JSON.stringify( $(this).serializeArray() )));
+    });
+
+    var setGameVars = function(obj) {
+      var arr = [],
+        r,
+        c,
+        d;
+      if(obj == null || typeof obj == undefined) {
+        return false;
+      }
+      else {
+        for(i in obj) {
+          if(obj[i].name == 'cols'){ c = obj[i].value; }
+          else if(obj[i].name == 'rows'){ r = obj[i].value; }
+          else{ d = obj[i].value; }
+        }
+        rows = r;
+        cols = c;
+        setDifficultyLevel(d);
+      }
+      $('#minecount').html('').html(getMinecount());
+      $('#minesweeper').html('');
+      constructGrid();
+      return false;
+    }
+
+    var setDifficultyLevel = function(val) {
+      difficultyLevel = val;
+      if(val == 'beginner') {
+        mineCount = Math.ceil( (rows * cols)/((rows * cols)/2) );
+      }
+      else if(val == 'intermediate') {
+        mineCount = Math.ceil( (rows * cols)/((rows * cols)/5) );
+      }
+      else {
+        mineCount = Math.ceil( (rows * cols)/((rows * cols)/10) );
+      }
+    }
+
+    var getCols = function() {
+      return cols;
+    }
+
+    var getRows = function() {
+      return rows;
+    }
+
+    var getDifficultyLevel = function() {
+      return difficultyLevel;
+    }
+
+    var getMinecount = function() {
+      return mineCount;
+    }
+
+    // start it off!
+    initializeGame();
+    //set form vals
+    setConfigFormVals();
 
   </script>
 
